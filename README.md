@@ -47,39 +47,24 @@ The unified command shape is:
 
 ```bash
 cd /path/to/DORO-STVG
-
-CUDA_VISIBLE_DEVICES=0 \
-uv run --project envs/eval/qwen python eval/main.py run \
-  --model_name videochat-r1 \
-  --model_path /path/to/VideoChat-R1_7B \
-  --data_name dorostvg \
-  --annotation_path /path/to/query.jsonl \
-  --video_dir /path/to/videos \
-  --output_dir ./res/videochat_r1_eval \
-  --batch_size 1 \
-  --max_tokens 512 \
-  --max_model_len 8192 \
-  --temperature 0.0
+source envs/eval/qwen/.venv/bin/activate
+bash eval/scripts/run_videochat_r1.sh
 ```
+
+Edit the configuration block at the top of the script to set `MODEL_PATH`, `ANNOTATION_PATH`, `VIDEO_DIR`, `OUTPUT_DIR`, and `CUDA_VISIBLE_DEVICES`. The script follows the same launch style as `eval/scripts/run_qwen.sh`: it enters `eval/` and calls `python main.py run`.
+
+`CUDA_VISIBLE_DEVICES` selects the GPU. `VIDEOCHAT_R1_MAX_FRAMES` and `VIDEOCHAT_R1_MAX_OUTPUT_FRAMES` are adapter controls for clip sampling and sparse frame outputs; keeping them explicit makes smoke-test results easier to reproduce.
 
 For `llava-1.6`:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 \
-LLAVA_16_MAX_FRAMES=4 \
-LLAVA_16_GRID_COLUMNS=2 \
-uv run --project envs/eval/qwen python eval/main.py run \
-  --model_name llava-1.6 \
-  --model_path /path/to/llava-v1.6-mistral-7b-hf \
-  --data_name dorostvg \
-  --annotation_path /path/to/query.jsonl \
-  --video_dir /path/to/videos \
-  --output_dir ./res/llava16_eval \
-  --batch_size 1 \
-  --max_tokens 512 \
-  --max_model_len 8192 \
-  --temperature 0.0
+source envs/eval/qwen/.venv/bin/activate
+bash eval/scripts/run_llava_16.sh
 ```
+
+Edit the configuration block at the top of the script to set `MODEL_PATH`, `ANNOTATION_PATH`, `VIDEO_DIR`, `OUTPUT_DIR`, and `CUDA_VISIBLE_DEVICES`. The script follows the same launch style as `eval/scripts/run_qwen.sh`: it enters `eval/` and calls `python main.py run`.
+
+`CUDA_VISIBLE_DEVICES` selects the GPU. `LLAVA_16_MAX_FRAMES` controls how many video frames are sampled into the image grid, and `LLAVA_16_GRID_COLUMNS` controls the grid layout. They are not required for import, but they should stay explicit in benchmark scripts because they change the model input.
 
 For `stvg-r1`, benchmark runs should normally disable optional heuristic visual refinement:
 
