@@ -16,7 +16,18 @@ LLAVA_ST_DEPENDENCIES_LOADED = False
 
 
 def _bundled_llava_st_root() -> Path:
-    return Path(__file__).resolve().parents[1] / "dependences" / "LLaVA-ST"
+    env_root = os.getenv("LLAVA_ST_SOURCE_DIR")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+
+    candidates = [
+        Path(__file__).resolve().parents[1] / "dependences" / "LLaVA-ST",
+        Path(__file__).resolve().parents[1] / "dependences" / "LLaVAST",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _load_bundled_get_variables():

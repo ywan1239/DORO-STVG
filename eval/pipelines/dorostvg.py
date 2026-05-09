@@ -10,6 +10,23 @@ from prompts import parse_response
 
 logger = logging.getLogger(__name__)
 
+CLIP_SPLIT_ENABLED_MODELS = {
+    "llava-st-qwen2",
+    "llava_st_qwen2",
+    "llavast",
+    "llava-st",
+    "llava1.6",
+    "llava-1.6",
+    "llava16",
+    "llava_16",
+    "videochat-r1",
+    "videochat_r1",
+    "videochatr1",
+    "stvg-r1",
+    "stvg_r1",
+    "stvgr1",
+}
+
 
 def _discover_st_align_benchmark_path() -> Optional[Path]:
     env_path = os.getenv("ST_ALIGN_BENCHMARK_PATH")
@@ -124,6 +141,9 @@ class DOROSTVGPipeline(BasePipeline):
     def get_dataset_name(self) -> str:
         return "DORO-STVG"
 
+    def _supports_clip_split(self) -> bool:
+        return str(self.model_name).strip().lower() in CLIP_SPLIT_ENABLED_MODELS
+
     def load_data(self) -> List[Dict[str, Any]]:
         samples: List[Dict[str, Any]] = []
         split_index = _load_st_align_split_index()
@@ -174,7 +194,7 @@ class DOROSTVGPipeline(BasePipeline):
                 }
 
                 gt_span = gt_tracks_sampled[0].get('temporal_span')
-                if isinstance(gt_span, tuple) and len(gt_span) == 2:
+                if self._supports_clip_split() and isinstance(gt_span, tuple) and len(gt_span) == 2:
                     split = split_index.get((video_name, int(gt_span[0]), int(gt_span[1])))
                     if split is not None:
                         sample['video_input_path'] = f"{video_path}::split={split[0]}:{split[1]}"

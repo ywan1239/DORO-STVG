@@ -72,6 +72,42 @@ def _build_model(
             gpu_memory_utilization=gpu_memory_utilization,
         )
 
+    if name in ["videochat-r1", "videochat_r1", "videochatr1"] or "videochat-r1" in model_path.lower():
+        from models.videochat_r1 import VideoChatR1
+        return VideoChatR1(
+            model_path=model_path,
+            batch_size=batch_size,
+            max_tokens=max_tokens,
+            max_model_len=max_model_len,
+            temperature=temperature,
+            tensor_parallel_size=tensor_parallel_size,
+            gpu_memory_utilization=gpu_memory_utilization,
+        )
+
+    if name in ["llava1.6", "llava-1.6", "llava16", "llava_16"] or "llava-v1.6" in model_path.lower():
+        from models.llava_16 import Llava16Model
+        return Llava16Model(
+            model_path=model_path,
+            batch_size=batch_size,
+            max_tokens=max_tokens,
+            max_model_len=max_model_len,
+            temperature=temperature,
+            tensor_parallel_size=tensor_parallel_size,
+            gpu_memory_utilization=gpu_memory_utilization,
+        )
+
+    if name in ["stvg-r1", "stvg_r1", "stvgr1"] or "stvg-r1" in model_path.lower():
+        from models.stvg_r1 import STVGR1
+        return STVGR1(
+            model_path=model_path,
+            batch_size=batch_size,
+            max_tokens=max_tokens,
+            max_model_len=max_model_len,
+            temperature=temperature,
+            tensor_parallel_size=tensor_parallel_size,
+            gpu_memory_utilization=gpu_memory_utilization,
+        )
+
     raise ValueError(f"Unknown model: {model_name}")
 
 
@@ -123,9 +159,8 @@ class STVGEvaluator:
                 output_dir=output_dir,
                 batch_size=batch_size,
             )
-            
             return pipeline.run_evaluation()
-        
+
         elif data_name.lower() in ['vidstg', 'vid-stg']:
             from pipelines.vidstg import VidSTGPipeline
 
@@ -138,9 +173,8 @@ class STVGEvaluator:
                 output_dir=output_dir,
                 batch_size=batch_size,
             )
-            
             return pipeline.run_evaluation()
-        
+
         elif data_name.lower() in ['dorostvg', 'doro-stvg']:
             from pipelines.dorostvg import DOROSTVGPipeline
 
@@ -153,7 +187,6 @@ class STVGEvaluator:
                 output_dir=output_dir,
                 batch_size=batch_size,
             )
-            
             return pipeline.run_evaluation()
 
         raise ValueError(f"Unknown dataset: {data_name}")

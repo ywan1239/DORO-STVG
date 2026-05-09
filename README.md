@@ -1,22 +1,122 @@
 # DORO-STVG
 
-## 1. Evaluation Framework
+DORO-STVG provides an evaluation and data-generation toolkit for spatiotemporal video grounding. The evaluation side exposes a unified entry point, `eval/main.py`, for running STVG-style benchmarks across multiple video-language models with normalized temporal spans and frame-level bounding boxes.
 
-`eval/main.py` is the unified entry point. The current code supports:
+This branch adds practical evaluation adapters for non-Qwen STVG backends while keeping Qwen as the baseline path:
 
-- Models: `qwen2.5vl` / `qwen3vl` / `llava-st-qwen2` / `videomolmo`
-- Datasets: `hcstvg`, `vidstg`, `doro-stvg`
+- `qwen2.5vl` and `qwen3vl` use the baseline Qwen-VL route in `eval/models/qwen_family.py`.
+- `videochat-r1` reuses the Qwen/vLLM inference stack but has its own clip sampling, prompt, and response normalization.
+- `llava-1.6` is independent from VideoChat-R1 and shares only neutral STVG adapter utilities.
+- `stvg-r1` uses the same Qwen-family runtime with STVG-R1-specific prompting and parsing.
+- `llava-st-qwen2` uses the bundled LLaVA-ST runtime under `eval/dependences/LLaVAST`.
+- `videomolmo` is supported through an external VideoMolmo runtime.
 
+Shared frame sampling, `::split=start:end` parsing, JSON box parsing, and sampled-frame-to-original-frame remapping live in `eval/models/stvg_adapter_utils.py`.
 
-The default script is `eval/run_eval.sh`. You can edit it directly to change model paths, annotation paths, video paths, and output paths.
+## Evaluation Setup
 
-For `llava-st-qwen2`, make sure `PYTHONPATH` includes your local LLaVA-ST repository:
+Install `uv`, then create the model-specific evaluation environments from the checked-in lock files:
 
 ```bash
-export PYTHONPATH="/mnt/sdc/xingjianwang/yibowang/LLaVA-ST:${PYTHONPATH:-}"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc
+
+cd /path/to/DORO-STVG
+uv sync --project envs/eval/qwen
+uv sync --project envs/eval/llavast
 ```
 
-For `videomolmo`, set the external VideoMolmo runtime before evaluation:
+Use `envs/eval/qwen` for:
+
+- `qwen2.5vl`
+- `qwen3vl`
+- `videochat-r1`
+- `llava-1.6`
+- `stvg-r1`
+- `videomolmo`
+
+Use `envs/eval/llavast` for:
+
+- `llava-st-qwen2`
+
+The virtual environments themselves are not committed. Recreate them with `uv sync`; commit only `pyproject.toml` and `uv.lock` when dependency definitions change.
+
+## Running Evaluation
+
+The unified command shape is:
+
+```bash
+cd /path/to/DORO-STVG
+
+CUDA_VISIBLE_DEVICES=0 \
+uv run --project envs/eval/qwen python eval/main.py run \
+  --model_name videochat-r1 \
+  --model_path /path/to/VideoChat-R1_7B \
+  --data_name dorostvg \
+  --annotation_path /path/to/query.jsonl \
+  --video_dir /path/to/videos \
+  --output_dir ./res/videochat_r1_eval \
+  --batch_size 1 \
+  --max_tokens 512 \
+  --max_model_len 8192 \
+  --temperature 0.0
+```
+
+For `llava-1.6`:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+LLAVA_16_MAX_FRAMES=4 \
+LLAVA_16_GRID_COLUMNS=2 \
+uv run --project envs/eval/qwen python eval/main.py run \
+  --model_name llava-1.6 \
+  --model_path /path/to/llava-v1.6-mistral-7b-hf \
+  --data_name dorostvg \
+  --annotation_path /path/to/query.jsonl \
+  --video_dir /path/to/videos \
+  --output_dir ./res/llava16_eval \
+  --batch_size 1 \
+  --max_tokens 512 \
+  --max_model_len 8192 \
+  --temperature 0.0
+```
+
+For `stvg-r1`, benchmark runs should normally disable optional heuristic visual refinement:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+STVG_R1_VISUAL_REFINEMENT=0 \
+uv run --project envs/eval/qwen python eval/main.py run \
+  --model_name stvg-r1 \
+  --model_path /path/to/stvg-r1-model-7b \
+  --data_name dorostvg \
+  --annotation_path /path/to/query.jsonl \
+  --video_dir /path/to/videos \
+  --output_dir ./res/stvg_r1_eval \
+  --batch_size 1 \
+  --max_tokens 512 \
+  --max_model_len 8192 \
+  --temperature 0.0
+```
+
+For `llava-st-qwen2`:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+uv run --project envs/eval/llavast python eval/main.py run \
+  --model_name llava-st-qwen2 \
+  --model_path /path/to/LLaVA-ST-Qwen2-7B \
+  --data_name dorostvg \
+  --annotation_path /path/to/query.jsonl \
+  --video_dir /path/to/videos \
+  --output_dir ./res/llava_st_qwen2_eval \
+  --batch_size 1 \
+  --max_tokens 512 \
+  --max_model_len 8192 \
+  --temperature 0.0
+```
+
+For `videomolmo`, point the adapter to an external VideoMolmo checkout:
 
 ```bash
 export VIDEOMOLMO_REPO=/path/to/VideoMolmo
@@ -24,174 +124,55 @@ export VIDEOMOLMO_PYTHON=/path/to/videomolmo/bin/python
 export VIDEOMOLMO_COMPACT_QUERY=1
 ```
 
-Then run evaluation with `--model_name videomolmo --model_path videomolmo`.
+Then run with `--model_name videomolmo --model_path videomolmo`.
 
-Typical outputs:
+## Smoke Suite
 
-- `results.json`: per-sample predictions, parsed outputs, GT, and metrics
-- `status.json`: overall summary and averaged metrics
-
-## 2. Data Engine
-
-`graph_generator/` is to generate structured data from raw videos. Based on the current code, the main pipeline includes:
-
-1. Scene splitting
-2. Object detection and tracking
-3. Attribute generation
-4. Action detection
-5. Relation generation
-6. Cross-shot reference edge generation (optional)
-7. STVG query generation from scene graphs
-8. Formatting query outputs into training-friendly JSONL
-
-Relevant entry points:
-
-- [`graph_generator/main.py`](/home/wangxingjian/DORO-STVG/graph_generator/main.py): main scene graph generation entry
-- [`graph_generator/modules/query_generator_cpsat.py`](/home/wangxingjian/DORO-STVG/graph_generator/modules/query_generator_cpsat.py): generate queries from scene graphs
-- [`graph_generator/utils/format_train.py`](/home/wangxingjian/DORO-STVG/graph_generator/utils/format_train.py): convert query outputs into training format
-- [`graph_generator/scripts/run_generator.sh`](/home/wangxingjian/DORO-STVG/graph_generator/scripts/run_generator.sh): current command collection used in practice
-
-## 3. Environment Setup
-
-This repository does not currently use a single root-level setup script. The actual setup should follow the module-specific `pyproject.toml` files under `envs/`.
-
-### 3.1 Requirements
-
-Install `uv`:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.bashrc
-```
-
-### 3.2 Virtual Environment
-
-```bash
-cd /path/to/DORO-STVG/envs/eval
-uv sync
-```
-
-If `uv sync` times out on `files.pythonhosted.org` in this environment, refresh the lock and sync against the configured mirror:
-
-```bash
-cd /path/to/DORO-STVG/envs/eval
-uv lock --refresh
-uv sync --refresh
-```
-
-
-```bash
-cd /path/to/DORO-STVG/envs/graph_generator/main
-uv sync
-```
-
-This environment is used for:
-
-- `graph_generator/main.py`
-- the main pipeline modules for attributes, relations, reference edges, and query generation
-
-
-```bash
-cd /path/to/DORO-STVG/envs/graph_generator/action_detector
-uv sync
-```
-
-This separate environment is mainly used by the action detection module to avoid dependency conflicts with the main environment.
-
-### 3.5 Video Reader Backend
-
-The evaluation script currently defaults to `decord`:
-
-```bash
-export FORCE_QWENVL_VIDEO_READER=decord
-```
-
-You can switch to `torchvision` or `torchcodec` if needed.
-
-### 3.6 Extra Configuration for `graph_generator`
-
-`graph_generator` depends on both model checkpoints and API-related environment variables. The repository already contains `graph_generator/.env`, and the scripts load it automatically.
-
-The most important variables are:
-
-```bash
-API_KEYS=your_key_1,your_key_2
-MM_API_BASE_URL=https://your-compatible-endpoint
-```
-
-You also need to prepare:
-
-- YOLO weights
-- SAM2 / Grounded-SAM2 checkpoints
-- VideoMAE action detection checkpoints
-- DAM or other attribute-description models
-
-For those details, refer to `graph_generator/README.md`.
-
-## 4. Usage
-
-### 4.1 Run Evaluation
-
-```bash
-cd /path/to/DORO-STVG/eval
-bash run_eval.sh
-```
-
-For `llava-st-qwen2`, the evaluation environment also expects:
-
-- a local `LLaVA-ST` source checkout
-- local `LLaVA-ST-Qwen2-7B` model weights
-
-The default runner reads these environment variables:
-
-- `LLAVA_ST_SOURCE_DIR`
-- `MODEL_PATH`
-- `ANNOTATION_PATH`
-- `VIDEO_DIR`
-- `OUTPUT_DIR`
-- `CUDA_VISIBLE_DEVICES`
-
-A typical smoke-test command is:
+`eval/scripts/run_single_gpu_smoke_suite.sh` can run several configured backends against one annotation/video directory:
 
 ```bash
 cd /path/to/DORO-STVG
-CUDA_VISIBLE_DEVICES=3 \
-LLAVA_ST_SOURCE_DIR=/path/to/LLaVA-ST \
-MODEL_PATH=/path/to/LLaVA-ST-Qwen2-7B \
-ANNOTATION_PATH=/path/to/query_train_for_eval_smoke1.jsonl \
-VIDEO_DIR=/path/to/video_test1_smoke \
-OUTPUT_DIR=eval/res_llava_st_smoke \
-bash eval/run_eval.sh
+
+GPU_ID=0 \
+ANNOTATION_PATH=/path/to/query.jsonl \
+VIDEO_DIR=/path/to/videos \
+OUTPUT_BASE=./res/smoke_suite \
+VIDEOCHAT_R1_MODEL_PATH=/path/to/VideoChat-R1_7B \
+LLAVA16_MODEL_PATH=/path/to/llava-v1.6-mistral-7b-hf \
+STVG_R1_MODEL_PATH=/path/to/stvg-r1-model-7b \
+LLAVAST_MODEL_PATH=/path/to/LLaVA-ST-Qwen2-7B \
+bash eval/scripts/run_single_gpu_smoke_suite.sh
 ```
 
-If you prefer not to use the shell script, you can call the entry point directly:
+Outputs are written under the selected `output_dir` or `OUTPUT_BASE`. Each run creates:
+
+- `results.jsonl`: per-sample raw response, parsed prediction, metadata, and metrics.
+- `status.json`: run metadata, sample count, and averaged metrics.
+
+## Data Engine
+
+`graph_generator/` generates structured data from raw videos. The pipeline includes scene splitting, object detection and tracking, attribute generation, action detection, relation generation, optional cross-shot reference edges, STVG query generation, and conversion into training JSONL.
+
+Relevant entry points:
+
+- `graph_generator/main.py`: main scene graph generation entry.
+- `graph_generator/modules/query_generator_cpsat.py`: query generation from scene graphs.
+- `graph_generator/utils/format_train.py`: conversion into training format.
+- `graph_generator/scripts/run_generator.sh`: command examples used by the data engine.
+
+The graph generator uses separate `uv` environments:
 
 ```bash
-cd /home/wangxingjian/DORO-STVG/eval
-python main.py run \
-  --model_name=llava-st-qwen2 \
-  --model_path=/path/to/model \
-  --data_name=doro-stvg \
-  --annotation_path=/path/to/test.json \
-  --video_dir=/path/to/videos \
-  --output_dir=./eval/res
+cd /path/to/DORO-STVG
+uv sync --project envs/graph_generator/main
+uv sync --project envs/graph_generator/action_detector
 ```
 
-### 4.2 Run the Data Engine
+It also requires external detector/action/model checkpoints and API credentials. See `graph_generator/README.md` for the full setup.
 
-The current `run_generator.sh` contains the full pipeline command examples, and the bottom part of the script keeps the active query-generation example.
+## Training Data Format
 
-A typical workflow is:
-
-1. Generate `scene_graphs.jsonl`
-2. Generate `query.jsonl`
-3. Convert it into `query_train.jsonl`
-
-## 5. Output Data Formats
-
-### 5.3 Training Data Format
-
-This is the training-friendly formatted output generated from `query.jsonl` by `utils/format_train.py`. The main fields include:
+The training-friendly JSONL produced by `graph_generator/utils/format_train.py` contains fields such as:
 
 - `videopath`
 - `queryid`
@@ -200,10 +181,10 @@ This is the training-friendly formatted output generated from `query.jsonl` by `
 - `Width` / `Height`
 - `box`
 
-`box` is a trajectory string in the following format:
+The `box` field stores trajectories in this form:
 
 ```text
 target description: <frame_idx, time_sec, x1, y1, x2, y2; ... />
 ```
 
-Here the coordinates are already normalized to `[0, 1]` using the video width and height, which makes this format easier to use for training and annotation consumption.
+Coordinates are normalized to `[0, 1]` using the video width and height.

@@ -29,10 +29,62 @@ Guidelines:\n
 - Please firstly give the timestamps, and then give the spatial bounding box corresponding to each timestamp in the time period.\n
 """
 
+VIDEOCHAT_R1_USER_PROMPT = """Where does {query} occur in the video? Please find the location of the corresponding subject/object in this video.\n\n
+
+Guidelines:\n
+- The input video is already a short sampled clip.\n
+- Return a strict JSON object only, with no explanation.\n
+- Use exactly one top-level key named "target".\n
+- The value of "target" must be a JSON object whose keys are sampled frame indices as strings.\n
+- Each sampled frame index maps to one bounding box [x1, y1, x2, y2].\n
+- Bounding boxes may be normalized coordinates in [0, 1] or pixel coordinates.\n
+- Do not output timestamps.\n
+- Do not describe the answer in natural language.\n
+- Do not copy any illustrative frame indices or box values from the prompt.\n
+"""
+
+LLAVA_16_USER_PROMPT = """Where does {query} occur in the video? Please locate the single most likely corresponding subject/object from the sampled frames shown in the image.\n\n
+
+Guidelines:\n
+- The image is a collage of sampled video frames.\n
+- Return a strict JSON object only.\n
+- Use exactly one top-level key named "target".\n
+- The value of "target" must be a JSON object from tile ids to boxes.\n
+- Use at most one box per tile.\n
+- Do not return nested JSON under each tile.\n
+- Do not invent tile ids outside the allowed set provided later.\n
+- If the target is absent in a tile, omit that tile.\n
+- Each bounding box must be normalized to [0, 1] inside the corresponding tile.\n
+- Do not output timestamps.\n
+- Do not explain the answer in natural language.\n
+- Do not copy fixed numbers from the prompt.\n
+"""
+
+STVG_R1_USER_PROMPT = """Where does {query} occur in the video? Please locate the corresponding subject/object in this sampled clip.\n\n
+
+Guidelines:\n
+- You may reason briefly in <think>...</think>.\n
+- Put the final answer in <answer>...</answer>.\n
+- Prefer returning a strict JSON object in <answer> with one top-level key named "target".\n
+- The target value should map sampled frame indices to bounding boxes.\n
+- Bounding boxes may be normalized coordinates in [0, 1] or pixel coordinates.\n
+- If exact boxes are difficult, still return a strict JSON object in <answer>.\n
+- The fallback JSON may use "target_description" for a short phrase like "child in red shirt" and "frames" for sampled frame indices.\n
+- If you can only infer time, use "time_range": [start_sec, end_sec] inside <answer>.\n
+- Do not copy any illustrative frame indices or box values from the prompt.\n
+- If using JSON, use sampled frame indices as keys inside target.\n
+"""
+
 
 def format_prompt(query: str, prompt_style: str = "json") -> str:
     if prompt_style == "llava_st":
         return LLAVA_ST_USER_PROMPT.format(query=query)
+    if prompt_style == "llava_16":
+        return LLAVA_16_USER_PROMPT.format(query=query)
+    if prompt_style == "videochat_r1":
+        return VIDEOCHAT_R1_USER_PROMPT.format(query=query)
+    if prompt_style == "stvg_r1":
+        return STVG_R1_USER_PROMPT.format(query=query)
     return USER_PROMPT.format(query=query)
 
 
