@@ -111,25 +111,9 @@ export VIDEOMOLMO_COMPACT_QUERY=1
 
 Then run with `--model_name videomolmo --model_path videomolmo`.
 
-## Smoke Suite
+## Outputs
 
-`eval/scripts/run_single_gpu_smoke_suite.sh` can run several configured backends against one annotation/video directory:
-
-```bash
-cd /path/to/DORO-STVG
-
-GPU_ID=0 \
-ANNOTATION_PATH=/path/to/query.jsonl \
-VIDEO_DIR=/path/to/videos \
-OUTPUT_BASE=./res/smoke_suite \
-VIDEOCHAT_R1_MODEL_PATH=/path/to/VideoChat-R1_7B \
-LLAVA16_MODEL_PATH=/path/to/llava-v1.6-mistral-7b-hf \
-STVG_R1_MODEL_PATH=/path/to/stvg-r1-model-7b \
-LLAVAST_MODEL_PATH=/path/to/LLaVA-ST-Qwen2-7B \
-bash eval/scripts/run_single_gpu_smoke_suite.sh
-```
-
-Outputs are written under the selected `output_dir` or `OUTPUT_BASE`. Each run creates:
+Outputs are written under the selected `output_dir`. Each run creates:
 
 - `results.jsonl`: per-sample raw response, parsed prediction, metadata, and metrics.
 - `status.json`: run metadata, sample count, and averaged metrics.
